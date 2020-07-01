@@ -99,6 +99,7 @@ class MoneyForward():
         self.driver.get('https://moneyforward.com/bs/portfolio')
         self.wait.until(ec.presence_of_all_elements_located)
         elements = self.driver.find_elements_by_xpath('//*[@id="portfolio_det_eq"]/table/tbody/tr')
+        self.stock_price_dict = {}
         for i in range(len(elements)):
             tds = elements[i].find_elements_by_tag_name('td')
             name = tds[1].text
@@ -118,11 +119,13 @@ class MoneyForward():
                 elements = self.driver.find_elements_by_xpath('//*[@id="portfolio_det_eq"]/table/tbody/tr') # avoid stale error
 
     def stock_price(self, tick):
-        r = requests.get(f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={tick}&apikey={self.alphavantage_apikey}')
-        if r.status_code != 200:
-            raise ConnectionRefusedError()
-        data = r.json()
-        return float(data['Global Quote']['05. price'])
+        if tick not in self.stock_price_dict:
+          r = requests.get(f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={tick}&apikey={self.alphavantage_apikey}')
+          if r.status_code != 200:
+              raise ConnectionRefusedError()
+          data = r.json()
+          self.stock_price_dict[tick] = float(data['Global Quote']['05. price'])
+        return self.stock_price_dict[tick]
 
     def usdrate(self):
         r = requests.get(f'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=JPY&apikey={self.alphavantage_apikey}')
