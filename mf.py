@@ -61,7 +61,7 @@ class MoneyForward():
 
         if self.driver.find_elements_by_class_name("me-home"):
             logger.info("successfully logged in.")
-        # New type of MoneyForward two step verifications
+        # MoneyForward two step verifications
         elif self.driver.current_url.startswith('https://id.moneyforward.com/two_factor_auth/totp'):
             self.confirm_two_step_verification_param()
             if os.environ['MF_TWO_STEP_VERIFICATION'].lower() == "totp":
@@ -72,21 +72,6 @@ class MoneyForward():
             self.driver.find_element_by_xpath('//*[@type="submit"]').click()
             self.wait.until(ec.presence_of_all_elements_located)
             if self.driver.find_elements_by_class_name("me-home"):
-                logger.info("successfully logged in.")
-            else:
-                raise ValueError("failed to log in.")
-        # Old type of MoneyForward two step verifications (currently does NOT works)
-        elif self.driver.find_elements_by_id("page-two-step-verifications"):
-            self.confirm_two_step_verification_param()
-            if os.environ['MF_TWO_STEP_VERIFICATION'].lower() == "gmail":
-                logger.info("waiting confirmation code from Gmail...")
-                confirmation_code = self.get_confirmation_code_from_gmail(login_time)
-            else:
-                raise ValueError("unsupported two step verification is found. check your env MF_TWO_STEP_VERIFICATION.")
-            self.driver.get('https://moneyforward.com/users/two_step_verifications/verify/{confirmation_code}'.format(confirmation_code=confirmation_code))
-            self.wait.until(ec.presence_of_all_elements_located)
-            self.driver.get('https://moneyforward.com/users/sign_in')
-            if self.driver.find_elements_by_id("home"):
                 logger.info("successfully logged in.")
             else:
                 raise ValueError("failed to log in.")
@@ -168,50 +153,6 @@ class MoneyForward():
             raise ValueError("env MF_TWO_STEP_VERIFICATION_TOTP_SECRET_KEY are not found.")
         confirmation_code = pyotp.TOTP(os.getenv("MF_TWO_STEP_VERIFICATION_TOTP_SECRET_KEY")).now()
         return confirmation_code
-
-    def get_confirmation_code_from_gmail(self, sent_since):
-        if not 'MF_TWO_STEP_VERIFICATION_GMAIL_ACCOUNT' in os.environ or not 'MF_TWO_STEP_VERIFICATION_GMAIL_APP_PASS' in os.environ:
-            raise ValueError("env MF_TWO_STEP_VERIFICATION_GMAIL_ACCOUNT and/or MF_TWO_STEP_VERIFICATION_GMAIL_APP_PASS are not found.")
-        timeout = int(os.getenv("MF_TWO_STEP_VERIFICATION_TIMEOUT", "180"))
-        interval = int(os.getenv("MF_TWO_STEP_VERIFICATION_INTERVAL", "5"))
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            confirmation_code = self.read_confirmation_code_from_gmail(sent_since)
-            if confirmation_code:
-                return confirmation_code
-            time.sleep(interval)
-
-    def read_confirmation_code_from_gmail(self, sent_since):
-        gmail_account = os.getenv("MF_TWO_STEP_VERIFICATION_GMAIL_ACCOUNT")
-        gmail_app_pass = os.getenv("MF_TWO_STEP_VERIFICATION_GMAIL_APP_PASS")
-        gmail = imaplib.IMAP4_SSL("imap.gmail.com", '993')
-        gmail.login(gmail_account, gmail_app_pass)
-        gmail.select()
-        search_option = '(FROM "feedback@moneyforward.com" SENTSINCE {sent_since})'.format(sent_since=sent_since.strftime("%d-%b-%Y"))
-        head, data = gmail.search(None, search_option)
-
-        confirmation_code = ""
-        for num in data[0].split():
-            h, d = gmail.fetch(num, '(RFC822)')
-            raw_email = d[0][1]
-            message = email.message_from_string(raw_email.decode('utf-8'))
-            message_encoding = email.header.decode_header(message.get('Subject'))[0][1] or 'iso-2022-jp'
-            subject_header = email.header.decode_header(message.get('Subject'))[0][0]
-            subject = str(subject_header.decode(message_encoding))
-            if subject != u"【マネーフォワード ME】2段階認証メール":
-                continue
-            date_header = email.header.decode_header(message.get('Date'))
-            message_time = datetime.datetime.strptime(date_header[0][0], '%a, %d %b %Y %H:%M:%S %z') # RFC 2822 format
-            if sent_since < message_time:
-                body  = message.get_payload()[0].get_payload(decode=True).decode(encoding=message_encoding)
-                m = re.search(r"https://moneyforward.com/users/two_step_verifications/verify/([0-9]+)", body)
-                confirmation_code = m.group(1)
-                sent_since = message_time
-
-        gmail.close()
-        gmail.logout()
-        return confirmation_code
-
 
 ############################################################
 
