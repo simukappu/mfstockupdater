@@ -46,7 +46,7 @@ class MoneyForward():
         
         self.driver.get('https://moneyforward.com/')
         self.wait.until(ec.presence_of_all_elements_located)
-        self.driver.find_element_by_xpath('//*[@href="/users/sign_in"]').click()
+        self.driver.find_element_by_xpath('//*[@href="/sign_in"]').click()
         self.wait.until(ec.presence_of_all_elements_located)
         self.driver.get(self.driver.current_url.replace('/sign_in/new', '/sign_in/email'))
         self.wait.until(ec.presence_of_all_elements_located)
